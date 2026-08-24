@@ -1,0 +1,67 @@
+# ============================================================
+# Portainer Stack: hAI.TelegramDrivePortainer
+# Telegram-Drive als Docker Container mit VNC-Access
+# ============================================================
+
+services:
+  telegram-drive:
+    image: ghcr.io/jbkunama1/hai.telegramdriveportainer:latest
+    container_name: telegram-drive
+    restart: unless-stopped
+
+    # Ports
+    ports:
+      - "6080:6080"    # noVNC Web-Interface (Browser-Zugriff)
+      - "5900:5900"    # VNC (für VNC-Clients)
+
+    # Environment-Variablen
+    environment:
+      - VNC_PASSWORD=telegram123
+      - TZ=Europe/Berlin
+
+    # Volumes für Persistenz
+    volumes:
+      - telegram-drive-data:/root/.config/telegram-drive
+      - telegram-drive-downloads:/root/Downloads
+
+    # Ressourcen-Limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Security-Optionen
+    security_opt:
+      - no-new-privileges:true
+
+    # Logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "telegram-drive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  telegram-drive-data:
+    name: telegram-drive-data
+    driver: local
+  telegram-drive-downloads:
+    name: telegram-drive-downloads
+    driver: local
+
+networks:
+  default:
+    name: telegram-drive-network
+    driver: bridge
