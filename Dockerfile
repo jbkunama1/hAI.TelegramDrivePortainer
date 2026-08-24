@@ -47,6 +47,17 @@ RUN npm install
 ENV CI=true
 RUN npm run tauri build
 
+# Binary robust ermitteln: Name aus Cargo.toml, Fallback: erstes Executable
+RUN BINARY_NAME=$(grep -m1 '^name' /app/src-tauri/Cargo.toml | cut -d'"' -f2) && \
+    echo "Erwartetes Binary: ${BINARY_NAME}" && \
+    if [ -f "/app/src-tauri/target/release/${BINARY_NAME}" ]; then \
+      cp "/app/src-tauri/target/release/${BINARY_NAME}" /app/telegram-drive-bin; \
+    else \
+      BIN=$(find /app/src-tauri/target/release -maxdepth 1 -type f -executable ! -name '*.so' ! -name '*.d' | head -n1) && \
+      echo "Fallback-Binary: ${BIN}" && \
+      cp "${BIN}" /app/telegram-drive-bin; \
+    fi
+
 # ------------------------------------------------------------
 # Stage 2: Runtime - Minimaler Container mit Xvfb + VNC
 # ------------------------------------------------------------
@@ -57,7 +68,8 @@ LABEL org.opencontainers.image.source="https://github.com/jbkunama1/hAI.Telegram
 LABEL org.opencontainers.image.description="Telegram-Drive as Docker Container with VNC access"
 LABEL org.opencontainers.image.licenses="MIT"
 
-# Laufzeit-Abhängigkeiten für Tauri/GTK
+# Laufzeit-Abhängigkeiten für Tauri/GTK + VNC-Stack
+# (novnc aus Debian-Paket -> liegt unter /usr/share/novnc, zieht websockify mit)
 RUN apt-get update && apt-get install -y \
     libwebkit2gtk-4.1-0 \
     libxdo3 \
@@ -70,38 +82,34 @@ RUN apt-get update && apt-get install -y \
     libgstreamer1.0-0 \
     libgstreamer-plugins-base1.0-0 \
     ca-certificates \
+    curl \
     x11vnc \
     xvfb \
     fluxbox \
     novnc \
     websockify \
-    supervisor \
     x11-xkb-utils \
     xfonts-base \
     xfonts-scalable \
-    fonts-courier \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
-# noVNC Web-Interface einrichten
-RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc \
-    && cd /opt/novnc \
-    && ln -s vnc.html index.html
+# noVNC: vnc.html als index.html verlinken (Root-URL oeffnet direkt die UI)
+RUN ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
 WORKDIR /app
 
 # Binary aus Builder-Stage kopieren
-COPY --from=builder /app/src-tauri/target/release/telegram-drive /app/telegram-drive
+COPY --from=builder /app/telegram-drive-bin /app/telegram-drive
 
 # Startscript
 COPY <<'EOF' /app/start.sh
 #!/bin/bash
 set -e
 
-# VNC-Passwort setzen (standard: telegram123)
+# VNC-Passwort setzen (x11vnc-eigenes Tool, kein vncpasswd noetig)
 mkdir -p ~/.vnc
-echo "${VNC_PASSWORD:-telegram123}" | vncpasswd -f > ~/.vnc/passwd
-chmod 600 ~/.vnc/passwd
+x11vnc -storepasswd "${VNC_PASSWORD:-telegram123}" ~/.vnc/passwd
 
 # Xvfb starten (virtuelles Display)
 Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
@@ -113,8 +121,8 @@ fluxbox &
 # VNC-Server starten
 x11vnc -display :99 -forever -shared -rfbauth ~/.vnc/passwd -listen 0.0.0.0 &
 
-# noVNC WebSocket-Proxy starten
-/opt/novnc/utils/novnc_proxy --vnc localhost:5900 --listen 6080 &
+# noVNC via websockify (Web-UI auf Port 6080)
+websockify --web /usr/share/novnc 6080 localhost:5900 &
 
 # Warte kurz bis X11 bereit ist
 sleep 2
@@ -124,7 +132,7 @@ echo "Starting Telegram-Drive..."
 exec /app/telegram-drive
 EOF
 
-RUN chmod +x /app/start.sh
+RUN chmod +x /app/start.sh /app/telegram-drive
 
 # Ports: VNC (5900), noVNC Web (6080)
 EXPOSE 5900 6080
@@ -133,7 +141,7 @@ EXPOSE 5900 6080
 ENV VNC_PASSWORD=telegram123
 ENV DISPLAY=:99
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -x telegram-drive || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -sf http://localhost:6080/ || exit 1
 
 CMD ["/app/start.sh"]
