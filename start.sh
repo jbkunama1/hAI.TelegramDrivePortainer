@@ -23,6 +23,20 @@ eval "$(dbus-launch --sh-syntax)"
 # (Platform secure storage; Passwort = VNC_PASSWORD, Keyring liegt im Volume)
 echo -n "${VNC_PASSWORD:-telegram123}" | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null || true
 
+# REST-API per ENV konfigurieren (deklarativ, ueberschreibt UI-Settings):
+# Die App speichert den Key als sha256-hex in
+#   <app_data_dir>/api_settings.json  (identifier: com.cameronamer.telegramdrive)
+# -> /root/.local/share/com.cameronamer.telegramdrive/api_settings.json
+if [ -n "$TG_API_KEY" ]; then
+  APP_DATA_DIR="/root/.local/share/com.cameronamer.telegramdrive"
+  mkdir -p "$APP_DATA_DIR"
+  KEY_HASH=$(echo -n "$TG_API_KEY" | sha256sum | cut -d' ' -f1)
+  printf '{"enabled":true,"port":8550,"key_hash":"%s"}\n' "$KEY_HASH" > "$APP_DATA_DIR/api_settings.json"
+  echo "[start] REST-API auto-enabled (key from TG_API_KEY env, sha256 hash written)."
+else
+  echo "[start] TG_API_KEY not set - REST-API can be enabled manually in Settings."
+fi
+
 # Window-Manager starten
 fluxbox &
 
@@ -34,9 +48,8 @@ websockify --web /usr/share/novnc 6080 localhost:5900 &
 
 # REST-API Proxy:
 # Die App bindet die API bewusst nur auf 127.0.0.1:8550 (loopback-only).
-# socat exponiert sie kontrolliert auf 0.0.0.0:8560 (extern gemappt als 8550).
-# Hinweis: API muss in der App aktiviert sein (Settings -> API Server)
-# und braucht einen X-API-Key Header.
+# socat exponiert sie kontrolliert auf 0.0.0.0:8560 (extern gemappt als 8550,
+# intern im highfishNetwork als http://telegram-drive:8560 erreichbar).
 socat TCP-LISTEN:8560,fork,reuseaddr TCP:127.0.0.1:8550 &
 echo "[start] REST-API proxy listening on 0.0.0.0:8560 -> 127.0.0.1:8550"
 

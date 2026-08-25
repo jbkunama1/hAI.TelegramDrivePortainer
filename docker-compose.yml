@@ -3,11 +3,16 @@
 # Telegram-Drive als Docker Container mit VNC-Access
 # ============================================================
 #
-# WICHTIG - Passwort setzen:
-# NICHT hier im Editor hart codieren, sondern in Portainer unten im
-# Feld 'Environment variables' eintragen:
+# WICHTIG - in Portainer unten im Feld 'Environment variables':
 #   VNC_PASSWORD=dein-sicheres-passwort
+#   TG_API_KEY=dein-api-key        (optional: aktiviert REST-API sofort)
 # (UI-Variablen greifen nur ueber die ${...}-Interpolation!)
+#
+# WICHTIG - Netzwerk:
+# Nutzt das externe Netz 'highfishNetwork' (muss existieren!).
+# Falls nicht vorhanden: docker network create highfishNetwork
+# Andere Container im selben Netz erreichen die API intern unter:
+#   http://telegram-drive:8560  (ohne Port-Mapping nach aussen)
 # ============================================================
 
 services:
@@ -22,18 +27,20 @@ services:
       - "5900:5900"    # VNC (für VNC-Clients)
       - "8550:8560"    # REST-API (socat-Proxy intern -> 127.0.0.1:8550 der App)
                        # NICHT 8550:8550 - die App bindet nur Loopback!
+                       # Bei Nutzung von highfishNetwork optional: Container
+                       # im selben Netz nutzen intern http://telegram-drive:8560
 
     # Environment-Variablen (per Portainer UI-Feld ueberschreibbar)
     environment:
       - VNC_PASSWORD=${VNC_PASSWORD:-telegram123}
       - TZ=${TZ:-Europe/Berlin}
+      - TG_API_KEY=${TG_API_KEY:-}   # leer = API aus (UI-Aktivierung moeglich)
 
     # Volumes für Persistenz
-    # - /root/.config komplett (Tauri-Identifier kann abweichen)
-    # - Keyrings: gespeicherte Credentials (Secure Storage)
     volumes:
       - telegram-drive-data:/root/.config
       - telegram-drive-keyrings:/root/.local/share/keyrings
+      - telegram-drive-appdata:/root/.local/share/com.cameronamer.telegramdrive
       - telegram-drive-downloads:/root/Downloads
 
     # Ressourcen-Limits
@@ -72,11 +79,14 @@ volumes:
   telegram-drive-keyrings:
     name: telegram-drive-keyrings
     driver: local
+  telegram-drive-appdata:
+    name: telegram-drive-appdata
+    driver: local
   telegram-drive-downloads:
     name: telegram-drive-downloads
     driver: local
 
 networks:
   default:
-    name: telegram-drive-network
-    driver: bridge
+    name: highfishNetwork
+    external: true

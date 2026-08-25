@@ -107,14 +107,12 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
-# noVNC: vnc.html als index.html verlinken (Root-URL oeffnet direkt die UI)
-RUN ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
-
 WORKDIR /app
 
-# Binary aus Builder-Stage + Startscript aus dem Repo kopieren
+# Binary aus Builder-Stage, Startscript + eigene noVNC-Landing-Page aus dem Repo
 COPY --from=builder /app/telegram-drive-bin /app/telegram-drive
 COPY start.sh /app/start.sh
+COPY index.html /usr/share/novnc/index.html
 
 RUN chmod +x /app/start.sh /app/telegram-drive
 
