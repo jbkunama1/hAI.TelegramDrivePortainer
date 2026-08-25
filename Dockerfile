@@ -77,7 +77,8 @@ LABEL org.opencontainers.image.description="Telegram-Drive as Docker Container w
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Laufzeit-Abhängigkeiten für Tauri/GTK + VNC-Stack
-# (novnc aus Debian-Paket -> liegt unter /usr/share/novnc, zieht websockify mit)
+# dbus-x11: dbus-launch (Session Bus, braucht die App fuer Tray + Secure Storage)
+# gnome-keyring: Secret Service (Platform secure storage der App)
 RUN apt-get update && apt-get install -y \
     libwebkit2gtk-4.1-0 \
     libxdo3 \
@@ -91,6 +92,8 @@ RUN apt-get update && apt-get install -y \
     libgstreamer-plugins-base1.0-0 \
     ca-certificates \
     curl \
+    dbus-x11 \
+    gnome-keyring \
     x11vnc \
     xvfb \
     fluxbox \
@@ -122,6 +125,13 @@ x11vnc -storepasswd "${VNC_PASSWORD:-telegram123}" ~/.vnc/passwd
 # Xvfb starten (virtuelles Display)
 Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
 export DISPLAY=:99
+
+# DBus Session Bus starten (braucht die App fuer Tray-Icon + Secure Storage)
+eval "$(dbus-launch --sh-syntax)"
+
+# GNOME Keyring als Secret Service starten/entsperren
+# (Platform secure storage; Passwort = VNC_PASSWORD, Keyring liegt im Volume)
+echo -n "${VNC_PASSWORD:-telegram123}" | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null || true
 
 # Window-Manager starten
 fluxbox &

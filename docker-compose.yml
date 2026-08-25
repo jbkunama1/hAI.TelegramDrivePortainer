@@ -20,8 +20,11 @@ services:
       - TZ=Europe/Berlin
 
     # Volumes für Persistenz
+    # - /root/.config komplett (Tauri-Identifier kann abweichen)
+    # - Keyrings: gespeicherte Credentials (Secure Storage)
     volumes:
-      - telegram-drive-data:/root/.config/telegram-drive
+      - telegram-drive-data:/root/.config
+      - telegram-drive-keyrings:/root/.local/share/keyrings
       - telegram-drive-downloads:/root/Downloads
 
     # Ressourcen-Limits
@@ -56,6 +59,9 @@ services:
 volumes:
   telegram-drive-data:
     name: telegram-drive-data
+    driver: local
+  telegram-drive-keyrings:
+    name: telegram-drive-keyrings
     driver: local
   telegram-drive-downloads:
     name: telegram-drive-downloads
