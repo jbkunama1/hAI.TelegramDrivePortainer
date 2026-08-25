@@ -1,12 +1,14 @@
 # ============================================================
 # Telegram-Drive Docker Container
 # Multi-Stage Build für Tauri Desktop-App im Headless-Modus
+# Build-Deps angelehnt an den offiziellen release.yml Workflow
+# von caamer20/Telegram-Drive (Node 22, npm ci, libdbus-1-dev)
 # ============================================================
 
 # ------------------------------------------------------------
 # Stage 1: Builder - Tauri-App kompilieren
 # ------------------------------------------------------------
-FROM node:20-bookworm AS builder
+FROM node:22-bookworm AS builder
 
 LABEL maintainer="hAI.TelegramDrivePortainer"
 
@@ -14,24 +16,20 @@ LABEL maintainer="hAI.TelegramDrivePortainer"
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Tauri Linux-Abhängigkeiten installieren
+# Tauri Linux-Abhängigkeiten (wie im offiziellen release.yml Workflow)
 RUN apt-get update && apt-get install -y \
     libwebkit2gtk-4.1-dev \
+    libssl-dev \
+    libdbus-1-dev \
+    libgtk-3-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev \
+    libjavascriptcoregtk-4.1-dev \
+    libsoup-3.0-dev \
     build-essential \
     curl \
     wget \
     file \
-    libxdo-dev \
-    libssl-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev \
-    libgtk-3-dev \
-    libjavascriptcoregtk-4.1-dev \
-    libsoup-3.0-dev \
-    libgstreamer1.0-dev \
-    libgstreamer-plugins-base1.0-dev \
-    gperf \
-    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -40,8 +38,18 @@ WORKDIR /app
 RUN git clone --depth 1 https://github.com/caamer20/Telegram-Drive.git /tmp/telegram-drive
 RUN cp -r /tmp/telegram-drive/app/* /app/
 
-# Dependencies installieren
-RUN npm install
+# Dependencies exakt nach Lockfile installieren (wie offizieller Workflow)
+RUN npm ci
+
+# tauri.conf.json patchen:
+# - createUpdaterArtifacts: false -> sonst bricht der Build ohne
+#   TAURI_SIGNING_PRIVATE_KEY ab (Secret liegt nur im Original-Repo)
+# - targets: ["deb"] statt "all" -> AppImage-Bundling via linuxdeploy
+#   braucht FUSE (in Docker nicht vorhanden), RPM ist unnoetig.
+#   Wir brauchen nur das Binary aus target/release.
+RUN sed -i 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/' src-tauri/tauri.conf.json \
+    && sed -i 's/"targets": "all"/"targets": ["deb"]/' src-tauri/tauri.conf.json \
+    && grep -E 'createUpdaterArtifacts|"targets"' src-tauri/tauri.conf.json
 
 # Tauri-App bauen (Release-Build)
 ENV CI=true
