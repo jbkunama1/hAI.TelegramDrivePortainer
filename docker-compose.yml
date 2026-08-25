@@ -2,6 +2,13 @@
 # Portainer Stack: hAI.TelegramDrivePortainer
 # Telegram-Drive als Docker Container mit VNC-Access
 # ============================================================
+#
+# WICHTIG - Passwort setzen:
+# NICHT hier im Editor hart codieren, sondern in Portainer unten im
+# Feld 'Environment variables' eintragen:
+#   VNC_PASSWORD=dein-sicheres-passwort
+# (UI-Variablen greifen nur ueber die ${...}-Interpolation!)
+# ============================================================
 
 services:
   telegram-drive:
@@ -14,10 +21,10 @@ services:
       - "6080:6080"    # noVNC Web-Interface (Browser-Zugriff)
       - "5900:5900"    # VNC (für VNC-Clients)
 
-    # Environment-Variablen
+    # Environment-Variablen (per Portainer UI-Feld ueberschreibbar)
     environment:
-      - VNC_PASSWORD=telegram123
-      - TZ=Europe/Berlin
+      - VNC_PASSWORD=${VNC_PASSWORD:-telegram123}
+      - TZ=${TZ:-Europe/Berlin}
 
     # Volumes für Persistenz
     # - /root/.config komplett (Tauri-Identifier kann abweichen)

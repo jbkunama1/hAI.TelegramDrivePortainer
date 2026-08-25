@@ -9,52 +9,54 @@ Basiert auf [caamer20/Telegram-Drive](https://github.com/caamer20/Telegram-Drive
 - ✅ **Unbegrenzter Cloud-Speicher** über Telegram-API
 - ✅ **VNC-Access** – Browser-basiertes Web-Interface (noVNC)
 - ✅ **Direkter VNC-Zugriff** für Desktop-Clients
-- ✅ **Automatische Builds** via GitHub Actions
+- ✅ **Automatische Builds** via GitHub Actions (GHCR-Cache, schnelle Rebuilds)
 - ✅ **GHCR Registry** – `ghcr.io/jbkunama1/hai.telegramdriveportainer`
 - ✅ **Portainer-ready** – Ein-Klick-Deployment als Stack
-- ✅ **Persistente Volumes** – Config & Downloads bleiben erhalten
+- ✅ **Persistente Volumes** – Config, Keyring & Downloads bleiben erhalten
+- ✅ **DBus + GNOME Keyring** – Secure Storage und Tray-Support funktionieren
 - ✅ **Healthchecks** – Automatische Überwachung
 
-## 🏗️ Architektur
+## 🚀 Quick Start (Portainer)
+
+### 1. Stack anlegen
+
+1. **Portainer UI** öffnen → **Stacks** → **Add stack**
+2. **Web Editor** wählen
+3. Inhalt von `docker-compose.yml` einfügen
+
+### 2. Passwort setzen (wichtig!)
+
+**Nicht** im Editor hardcodieren. Stattdessen im Portainer-Stack-Editor **unter dem Textfeld** bei **Environment variables** eintragen:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  GitHub Actions (CI/CD)                             │
-│  - Build auf Push/Tag                               │
-│  - Push nach GHCR                                   │
-└─────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────┐
-│  GHCR: ghcr.io/jbkunama1/hai.telegramdriveportainer │
-└─────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────┐
-│  Portainer Stack                                    │
-│  - docker-compose.yml                               │
-│  - VNC-Port: 5900                                   │
-│  - Web-Port: 6080 (noVNC)                           │
-└─────────────────────────────────────────────────────┘
+VNC_PASSWORD=dein-sicheres-passwort
 ```
 
-## 🚀 Quick Start
+> ⚠️ UI-Variablen greifen nur, weil das Compose `${VNC_PASSWORD:-telegram123}` interpoliert. Hart codierte Werte im Compose würden die UI-Variablen ignorieren.
 
-### 1. In Portainer deployen
+### 3. Deployen
 
-1. **Portainer UI** öffnen
-2. **Stacks** → **Add stack**
-3. **Web Editor** wählen
-4. Inhalt von `docker-compose.yml` einfügen
-5. **Deploy the stack**
+**Deploy the stack** klicken. Beim ersten Start prüft das Startscript, ob ein Custom-Passwort gesetzt ist, und loggt:
 
-### 2. Zugriff
+```
+[start] Custom VNC password is set (from VNC_PASSWORD env).
+```
 
-- **Web-Interface (noVNC)**: `http://<dein-server>:6080`
-  - VNC-Passwort: `telegram123` (in `docker-compose.yml` anpassen!)
+oder als Warnung:
+
+```
+[start] WARNING: Using DEFAULT VNC password! Set VNC_PASSWORD in Portainer.
+```
+
+### 4. Zugriff
+
+- **Web-Interface (noVNC)**: `http://<dein-server>:6080` → Connect → dein VNC-Passwort
 - **VNC-Client**: `<dein-server>:5900`
 
-### 3. Telegram-Login
+### 5. Telegram-Login
 
 Beim ersten Start der App:
+
 1. Auf [my.telegram.org](https://my.telegram.org) einloggen
 2. **API development tools** → neue App erstellen
 3. `api_id` und `api_hash` in der App eingeben
@@ -65,7 +67,7 @@ Beim ersten Start der App:
 
 | Variable | Standard | Beschreibung |
 |----------|----------|--------------|
-| `VNC_PASSWORD` | `telegram123` | VNC-Zugangspasswort |
+| `VNC_PASSWORD` | `telegram123` | VNC-Zugangspasswort – **unbedingt ändern!** |
 | `TZ` | `Europe/Berlin` | Zeitzone |
 
 ### Ports
@@ -79,52 +81,54 @@ Beim ersten Start der App:
 
 | Volume | Pfad im Container | Beschreibung |
 |--------|-------------------|--------------|
-| `telegram-drive-data` | `/root/.config/telegram-drive` | App-Config & Session |
+| `telegram-drive-data` | `/root/.config` | App-Config & Telegram-Session |
+| `telegram-drive-keyrings` | `/root/.local/share/keyrings` | GNOME Keyring (Secure Storage) |
 | `telegram-drive-downloads` | `/root/Downloads` | Heruntergeladene Dateien |
+
+## 🔑 Passwort nachträglich ändern
+
+1. In Portainer: Stack → **Editor** → Environment variables → `VNC_PASSWORD` ändern
+2. **Update the stack** (Container wird neu erstellt)
+3. **Keyring beachten**: Der GNOME-Keyring wurde mit dem alten Passwort als Master-Passwort angelegt. Nach einer Passwort-Änderung kann er nicht mehr entsperrt werden. Falls du ihn schon genutzt hast: Credentials vorher sichern. Sonst einfach das Volume `telegram-drive-keyrings` löschen – er wird mit dem neuen Passwort neu erstellt.
 
 ## 🔒 Sicherheit
 
-- **VNC-Passwort**: Unbedingt in `docker-compose.yml` ändern!
+- **VNC-Passwort**: Unbedingt über die Portainer-Env-Variablen setzen!
 - **Network Isolation**: Stack läuft im eigenen Bridge-Netzwerk
 - **Security-Scan**: Trivy-Scan bei jedem Push (siehe Workflow)
 - **no-new-privileges**: Container-Security-Flag aktiv
+- **Kein TLS in noVNC**: Für externe Erreichbarkeit Reverse Proxy (z. B. Traefik/NPM) mit TLS davor setzen
 
 ## 🛠️ Troubleshooting
 
-### Container startet nicht
+### Container-Logs ansehen
 
 ```bash
-# Logs ansehen
 docker logs telegram-drive
-
-# In Container shellen
-docker exec -it telegram-drive bash
 ```
 
 ### VNC-Verbindung schlägt fehl
 
-- Prüfe, ob Ports 6080/5900 korrekt gemappt sind
-- Firewall-Regeln prüfen: `ufw allow 6080/tcp` und `ufw allow 5900/tcp`
+- Ports 6080/5900 korrekt gemappt? Firewall: `ufw allow 6080/tcp`
+- Passwort stimmt nicht? → Prüfe im Log, ob `Custom VNC password is set` erscheint. Wenn `WARNING: Using DEFAULT` steht, wurde die UI-Variable nicht übernommen (Stack updaten!).
 
-### Telegram-Login funktioniert nicht
+### Harmlos im Log (kein Fehler)
 
-- API-ID und API-Hash von [my.telegram.org](https://my.telegram.org) bereithalten
-- Session wird im Volume `telegram-drive-data` persistiert
+- `Failed to read: session.*` (Fluxbox-Erststart)
+- `Gdk-CRITICAL: gdk_window_thaw_toplevel_updates` (GTK unter Xvfb)
+- `No SSL/TLS support` (websockify ohne Zertifikat – intern ok)
+- `listen6: bind: Address already in use` (IPv6 in Docker)
 
 ## 📦 Build-Status
 
 ![Build Status](https://github.com/jbkunama1/hAI.TelegramDrivePortainer/actions/workflows/build-and-push.yml/badge.svg)
 
-## 📝 Lizenz
-
-- **Telegram-Drive Original**: [caamer20/Telegram-Drive](https://github.com/caamer20/Telegram-Drive)
-- **Dieses Docker-Setup**: MIT License
-
-## 🙏 Credits
+## 📝 Lizenz & Credits
 
 - **Original-Projekt**: [caamer20/Telegram-Drive](https://github.com/caamer20/Telegram-Drive)
 - **Tauri Framework**: [tauri.app](https://tauri.app)
 - **noVNC**: [novnc.com](https://novnc.com)
+- **Dieses Docker-Setup**: MIT License
 
 ---
 
