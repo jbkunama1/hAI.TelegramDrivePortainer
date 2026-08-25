@@ -23,19 +23,40 @@ eval "$(dbus-launch --sh-syntax)"
 # (Platform secure storage; Passwort = VNC_PASSWORD, Keyring liegt im Volume)
 echo -n "${VNC_PASSWORD:-telegram123}" | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null || true
 
-# REST-API per ENV konfigurieren (deklarativ, ueberschreibt UI-Settings):
-# Die App speichert den Key als sha256-hex in
-#   <app_data_dir>/api_settings.json  (identifier: com.cameronamer.telegramdrive)
-# -> /root/.local/share/com.cameronamer.telegramdrive/api_settings.json
-if [ -n "$TG_API_KEY" ]; then
-  APP_DATA_DIR="/root/.local/share/com.cameronamer.telegramdrive"
+# REST-API per ENV ein-/ausschalten (TG_API_KEY=true/false).
+# Der API-Key selbst wird weiterhin in der App-UI generiert!
+# Wir patchen per jq NUR das 'enabled'-Feld in api_settings.json -
+# ein per UI gesetzter key_hash (und der Port) bleiben erhalten.
+# Pfad: <app_data_dir>/api_settings.json (identifier: com.cameronamer.telegramdrive)
+APP_DATA_DIR="/root/.local/share/com.cameronamer.telegramdrive"
+SETTINGS_FILE="$APP_DATA_DIR/api_settings.json"
+
+set_api_enabled() {
+  local enabled="$1"
   mkdir -p "$APP_DATA_DIR"
-  KEY_HASH=$(echo -n "$TG_API_KEY" | sha256sum | cut -d' ' -f1)
-  printf '{"enabled":true,"port":8550,"key_hash":"%s"}\n' "$KEY_HASH" > "$APP_DATA_DIR/api_settings.json"
-  echo "[start] REST-API auto-enabled (key from TG_API_KEY env, sha256 hash written)."
-else
-  echo "[start] TG_API_KEY not set - REST-API can be enabled manually in Settings."
-fi
+  if [ -f "$SETTINGS_FILE" ] && jq -e . "$SETTINGS_FILE" >/dev/null 2>&1; then
+    # Bestehende Datei: nur enabled patchen, key_hash/port erhalten
+    jq ".enabled = $enabled" "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
+      && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+  else
+    # Neu anlegen (Key wird danach in der UI generiert)
+    printf '{"enabled":%s,"port":8550,"key_hash":null}\n' "$enabled" > "$SETTINGS_FILE"
+  fi
+}
+
+case "$(echo "${TG_API_KEY:-}" | tr '[:upper:]' '[:lower:]')" in
+  true|1|yes)
+    set_api_enabled true
+    echo "[start] REST-API enabled via TG_API_KEY=true (API key itself is managed in the app UI)."
+    ;;
+  false|0|no)
+    set_api_enabled false
+    echo "[start] REST-API disabled via TG_API_KEY=false."
+    ;;
+  *)
+    echo "[start] TG_API_KEY not set (true/false) - API settings managed in the app UI."
+    ;;
+esac
 
 # Window-Manager starten
 fluxbox &

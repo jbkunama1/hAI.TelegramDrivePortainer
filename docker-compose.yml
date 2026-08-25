@@ -5,8 +5,13 @@
 #
 # WICHTIG - in Portainer unten im Feld 'Environment variables':
 #   VNC_PASSWORD=dein-sicheres-passwort
-#   TG_API_KEY=dein-api-key        (optional: aktiviert REST-API sofort)
+#   TG_API_KEY=true                (optional: REST-API ein/aus)
 # (UI-Variablen greifen nur ueber die ${...}-Interpolation!)
+#
+# HINWEIS TG_API_KEY: nur ein Schalter (true/false)!
+# Der API-Key selbst wird in der App-UI generiert
+# (Settings -> API Server). Ein UI-generierter Key bleibt bei
+# Neustarts erhalten - das Startscript patched nur 'enabled'.
 #
 # WICHTIG - Netzwerk:
 # Nutzt das externe Netz 'highfishNetwork' (muss existieren!).
@@ -34,7 +39,8 @@ services:
     environment:
       - VNC_PASSWORD=${VNC_PASSWORD:-telegram123}
       - TZ=${TZ:-Europe/Berlin}
-      - TG_API_KEY=${TG_API_KEY:-}   # leer = API aus (UI-Aktivierung moeglich)
+      - TG_API_KEY=${TG_API_KEY:-}   # true = API an, false = API aus,
+                                     # leer = App-UI steuert (Key aus UI!)
 
     # Volumes für Persistenz
     volumes:

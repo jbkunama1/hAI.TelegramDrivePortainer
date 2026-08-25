@@ -80,6 +80,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 # dbus-x11: dbus-launch (Session Bus, braucht die App fuer Tray + Secure Storage)
 # gnome-keyring: Secret Service (Platform secure storage der App)
 # socat: Proxy fuer die REST-API (App bindet bewusst nur 127.0.0.1)
+# jq: patched api_settings.json (enabled-Flag) ohne key_hash anzufassen
 RUN apt-get update && apt-get install -y \
     libwebkit2gtk-4.1-0 \
     libxdo3 \
@@ -95,6 +96,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     dbus-x11 \
     gnome-keyring \
+    jq \
     socat \
     x11vnc \
     xvfb \
@@ -107,12 +109,14 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
+# noVNC: vnc.html als index.html verlinken (Root-URL oeffnet direkt die UI)
+RUN ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+
 WORKDIR /app
 
-# Binary aus Builder-Stage, Startscript + eigene noVNC-Landing-Page aus dem Repo
+# Binary aus Builder-Stage + Startscript aus dem Repo kopieren
 COPY --from=builder /app/telegram-drive-bin /app/telegram-drive
 COPY start.sh /app/start.sh
-COPY index.html /usr/share/novnc/index.html
 
 RUN chmod +x /app/start.sh /app/telegram-drive
 

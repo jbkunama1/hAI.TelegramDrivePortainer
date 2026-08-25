@@ -7,8 +7,8 @@ Basiert auf [caamer20/Telegram-Drive](https://github.com/caamer20/Telegram-Drive
 ## 📋 Features
 
 - ✅ **Unbegrenzter Cloud-Speicher** über Telegram-API
-- ✅ **VNC-Access** – Browser-basiertes Web-Interface (noVNC, eigene Landing-Page mit Autoconnect)
-- ✅ **REST-API per ENV konfigurierbar** – `TG_API_KEY` setzen, fertig (kein UI-Klick nötig)
+- ✅ **VNC-Access** – Browser-basiertes Web-Interface (noVNC)
+- ✅ **REST-API per ENV schaltbar** – `TG_API_KEY=true/false` (Key wird in der App-UI generiert)
 - ✅ **highfishNetwork** – läuft in deinem bestehenden Netz, intern erreichbar als `telegram-drive`
 - ✅ **Automatische Builds** via GitHub Actions (GHCR-Cache, schnelle Rebuilds)
 - ✅ **Persistente Volumes** – Config, App-Daten (Session!), Keyring & Downloads
@@ -27,11 +27,11 @@ Basiert auf [caamer20/Telegram-Drive](https://github.com/caamer20/Telegram-Drive
 
 ```
 VNC_PASSWORD=dein-sicheres-passwort
-TG_API_KEY=dein-langer-api-key
+TG_API_KEY=true
 ```
 
 > ⚠️ UI-Variablen greifen nur über die `${...}`-Interpolation im Compose.
-> `TG_API_KEY` ist optional – ohne ihn bleibt die API aus und lässt sich per UI aktivieren.
+> `TG_API_KEY` ist nur ein **Schalter** (`true`/`false`) – der API-Key selbst wird in der App-UI generiert (Settings → API Server). Leer lassen = die UI steuert an/aus.
 
 ### 3. Deployen
 
@@ -39,13 +39,13 @@ TG_API_KEY=dein-langer-api-key
 
 ```
 [start] Custom VNC password is set (from VNC_PASSWORD env).
-[start] REST-API auto-enabled (key from TG_API_KEY env, sha256 hash written).
+[start] REST-API enabled via TG_API_KEY=true (API key itself is managed in the app UI).
 [start] REST-API proxy listening on 0.0.0.0:8560 -> 127.0.0.1:8550
 ```
 
 ### 4. Zugriff
 
-- **Web-Interface (noVNC)**: `http://<dein-server>:6080` → Landing-Page leitet automatisch weiter → VNC-Passwort
+- **Web-Interface (noVNC)**: `http://<dein-server>:6080` → Connect → dein VNC-Passwort
 - **VNC-Client**: `<dein-server>:5900`
 
 ### 5. Telegram-Login
@@ -58,11 +58,12 @@ TG_API_KEY=dein-langer-api-key
 
 Endpunkte für Dateien, Ordner, Bulk-Aktionen, Storage-Stats, Thumbnails, Media-Metadaten – ideal für LLM-/Agent-Integration.
 
-### Aktivierung per ENV (empfohlen)
+### Aktivieren und Key generieren
 
-`TG_API_KEY` in den Portainer Environment Variables setzen. Das Startscript schreibt daraus deklarativ die App-Config (`api_settings.json` mit SHA-256-Hash des Keys, `enabled: true`, Port 8550). **Hinweis**: Bei gesetztem `TG_API_KEY` werden UI-Änderungen an den API-Settings beim Neustart überschrieben.
+1. `TG_API_KEY=true` in den Portainer Environment Variables → Stack updaten (oder in der App: Settings → API Server → Enable)
+2. App über noVNC öffnen → **Settings** → **API Server** → **API-Key generieren** (wird nur einmal angezeigt!)
 
-Alternativ ohne ENV: App → **Settings** → **API Server** → Enable + Key generieren.
+Der generierte Key liegt als SHA-256-Hash in `api_settings.json` (Volume `telegram-drive-appdata`) und **überlebt Neustarts** – das Startscript patched bei `TG_API_KEY=true/false` nur das `enabled`-Flag und fasst den Hash nicht an.
 
 ### Aufruf
 
@@ -88,7 +89,7 @@ Volle Endpunkt-Doku: [REST_API_Documentation.md](https://github.com/caamer20/Tel
 | Variable | Standard | Beschreibung |
 |----------|----------|--------------|
 | `VNC_PASSWORD` | `telegram123` | VNC-Passwort – **unbedingt ändern!** |
-| `TG_API_KEY` | _(leer)_ | API-Key; aktiviert die REST-API automatisch |
+| `TG_API_KEY` | _(leer)_ | `true`/`false` = REST-API an/aus; leer = UI steuert. Key kommt aus der App-UI |
 | `TZ` | `Europe/Berlin` | Zeitzone |
 
 ### Ports
@@ -104,7 +105,7 @@ Volle Endpunkt-Doku: [REST_API_Documentation.md](https://github.com/caamer20/Tel
 | Volume | Pfad im Container | Inhalt |
 |--------|-------------------|--------|
 | `telegram-drive-data` | `/root/.config` | App-Config |
-| `telegram-drive-appdata` | `/root/.local/share/com.cameronamer.telegramdrive` | App-Daten: `api_settings.json`, Session-DB |
+| `telegram-drive-appdata` | `/root/.local/share/com.cameronamer.telegramdrive` | App-Daten: `api_settings.json` (API-Key-Hash!), Session-DB |
 | `telegram-drive-keyrings` | `/root/.local/share/keyrings` | GNOME Keyring (Secure Storage) |
 | `telegram-drive-downloads` | `/root/Downloads` | Downloads |
 
@@ -120,10 +121,10 @@ Externes Netz `highfishNetwork` (muss existieren: `docker network create highfis
 
 ## 🔒 Sicherheit
 
-- **VNC-Passwort + API-Key** nur über Portainer-Env setzen (beide sind im Stack-Editor sichtbar → Portainer-Zugriff entsprechend absichern)
+- **VNC-Passwort** nur über Portainer-Env setzen (im Stack-Editor sichtbar → Portainer-Zugriff absichern)
 - **REST-API**: `X-API-Key`-Pflicht, aber CORS `any_origin` → nur im LAN/vertrauenswürdigen Netz exposen
 - **Kein TLS** in noVNC/API → bei externer Erreichbarkeit Reverse Proxy mit TLS davor
-- **no-new-privileges**, eigenes externes Netz, Trivy-Scan bei jedem Push
+- **no-new-privileges**, Trivy-Scan bei jedem Push
 
 ## 🛠️ Troubleshooting
 
@@ -133,7 +134,8 @@ Im Log muss `Custom VNC password is set` stehen. Bei `WARNING: Using DEFAULT` wu
 
 ### REST-API nicht erreichbar
 
-- `TG_API_KEY` gesetzt? Log: `REST-API auto-enabled ...`
+- Aktiviert? Log: `REST-API enabled via TG_API_KEY=true` (oder per UI)
+- API-Key in der UI generiert und im Header mitgeschickt?
 - Proxy läuft? Log: `REST-API proxy listening on 0.0.0.0:8560`
 - Test: `curl -v http://<server>:8550/api/v1/files` → **401 ohne Key ist ein gutes Zeichen**
 - Interner Test aus anderem Container: `curl -v http://telegram-drive:8560/api/v1/files`
