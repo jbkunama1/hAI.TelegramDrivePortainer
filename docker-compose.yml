@@ -20,6 +20,8 @@ services:
     ports:
       - "6080:6080"    # noVNC Web-Interface (Browser-Zugriff)
       - "5900:5900"    # VNC (für VNC-Clients)
+      - "8550:8560"    # REST-API (socat-Proxy intern -> 127.0.0.1:8550 der App)
+                       # NICHT 8550:8550 - die App bindet nur Loopback!
 
     # Environment-Variablen (per Portainer UI-Feld ueberschreibbar)
     environment:

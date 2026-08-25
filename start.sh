@@ -32,6 +32,14 @@ x11vnc -display :99 -forever -shared -rfbauth ~/.vnc/passwd -listen 0.0.0.0 &
 # noVNC via websockify (Web-UI auf Port 6080)
 websockify --web /usr/share/novnc 6080 localhost:5900 &
 
+# REST-API Proxy:
+# Die App bindet die API bewusst nur auf 127.0.0.1:8550 (loopback-only).
+# socat exponiert sie kontrolliert auf 0.0.0.0:8560 (extern gemappt als 8550).
+# Hinweis: API muss in der App aktiviert sein (Settings -> API Server)
+# und braucht einen X-API-Key Header.
+socat TCP-LISTEN:8560,fork,reuseaddr TCP:127.0.0.1:8550 &
+echo "[start] REST-API proxy listening on 0.0.0.0:8560 -> 127.0.0.1:8550"
+
 # Warte kurz bis X11 bereit ist
 sleep 2
 

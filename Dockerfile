@@ -79,6 +79,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 # Laufzeit-Abhängigkeiten für Tauri/GTK + VNC-Stack
 # dbus-x11: dbus-launch (Session Bus, braucht die App fuer Tray + Secure Storage)
 # gnome-keyring: Secret Service (Platform secure storage der App)
+# socat: Proxy fuer die REST-API (App bindet bewusst nur 127.0.0.1)
 RUN apt-get update && apt-get install -y \
     libwebkit2gtk-4.1-0 \
     libxdo3 \
@@ -94,6 +95,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     dbus-x11 \
     gnome-keyring \
+    socat \
     x11vnc \
     xvfb \
     fluxbox \
@@ -116,8 +118,8 @@ COPY start.sh /app/start.sh
 
 RUN chmod +x /app/start.sh /app/telegram-drive
 
-# Ports: VNC (5900), noVNC Web (6080)
-EXPOSE 5900 6080
+# Ports: VNC (5900), noVNC Web (6080), REST-API-Proxy (8560 intern -> extern 8550)
+EXPOSE 5900 6080 8560
 
 # Environment-Variablen
 ENV VNC_PASSWORD=telegram123
